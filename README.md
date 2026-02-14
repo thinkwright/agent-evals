@@ -1,6 +1,7 @@
 # agent-evals
 
 [![CI](https://github.com/thinkwright/agent-evals/actions/workflows/ci.yaml/badge.svg)](https://github.com/thinkwright/agent-evals/actions/workflows/ci.yaml)
+[![Release](https://img.shields.io/github/v/release/thinkwright/agent-evals)](https://github.com/thinkwright/agent-evals/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/thinkwright/agent-evals)](https://github.com/thinkwright/agent-evals)
 [![Go Reference](https://pkg.go.dev/badge/github.com/thinkwright/agent-evals.svg)](https://pkg.go.dev/github.com/thinkwright/agent-evals)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
