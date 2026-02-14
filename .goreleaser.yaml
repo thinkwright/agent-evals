@@ -36,6 +36,7 @@ brews:
   - repository:
       owner: thinkwright
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://thinkwright.ai/agent-evals"
     description: "Evaluate, test, and maintain your LLM coding agent configurations"
     license: "MIT"
