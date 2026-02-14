@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-02-14
+
 ### Added
 
 - Static analysis engine: domain extraction across 19 recognized categories, pairwise overlap via Jaccard similarity and LCS-based prompt comparison, conflict detection, coverage gap identification, boundary and uncertainty language scoring.
