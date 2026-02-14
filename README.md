@@ -9,6 +9,12 @@
 
 Static analysis and live boundary testing for LLM agent configurations. Detects scope overlap between agents, scores boundary awareness and calibration, identifies coverage gaps, and verifies that agents actually refuse out-of-scope questions at inference time.
 
+### Works With
+
+Claude Code · Cline · Cursor · Augment · Windsurf · Copilot · Aider · Custom YAML / JSON / Markdown agents
+
+agent-evals reads system prompts and agent definitions from any coding agent that uses text-based configuration. If your agent has a system prompt, agent-evals can analyze it.
+
 For full documentation, visit [thinkwright.ai/agent-evals](https://thinkwright.ai/agent-evals). For a live probe example with annotated results, see [thinkwright.ai/agent-evals/example](https://thinkwright.ai/agent-evals/example).
 
 ## Install
