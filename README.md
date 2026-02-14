@@ -1,9 +1,11 @@
 # agent-evals
 
 [![CI](https://github.com/thinkwright/agent-evals/actions/workflows/ci.yaml/badge.svg)](https://github.com/thinkwright/agent-evals/actions/workflows/ci.yaml)
-[![Release](https://img.shields.io/github/v/release/thinkwright/agent-evals)](https://github.com/thinkwright/agent-evals/releases)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/thinkwright/agent-evals)](https://github.com/thinkwright/agent-evals)
+[![Release](https://img.shields.io/github/v/release/thinkwright/agent-evals?color=blue)](https://github.com/thinkwright/agent-evals/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/thinkwright/agent-evals)](https://goreportcard.com/report/github.com/thinkwright/agent-evals)
 [![Go Reference](https://pkg.go.dev/badge/github.com/thinkwright/agent-evals.svg)](https://pkg.go.dev/github.com/thinkwright/agent-evals)
+[![Downloads](https://img.shields.io/github/downloads/thinkwright/agent-evals/total?color=orange)](https://github.com/thinkwright/agent-evals/releases)
+[![Homebrew](https://img.shields.io/badge/homebrew-thinkwright%2Ftap-blueviolet)](https://github.com/thinkwright/homebrew-tap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 Static analysis and live boundary testing for LLM agent configurations. Detects scope overlap between agents, scores boundary awareness and calibration, identifies coverage gaps, and verifies that agents actually refuse out-of-scope questions at inference time.
