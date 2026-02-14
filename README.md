@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/thinkwright/agent-evals/actions/workflows/ci.yaml/badge.svg)](https://github.com/thinkwright/agent-evals/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/thinkwright/agent-evals?color=blue)](https://github.com/thinkwright/agent-evals/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/thinkwright/agent-evals)](https://goreportcard.com/report/github.com/thinkwright/agent-evals)
 [![Go Reference](https://pkg.go.dev/badge/github.com/thinkwright/agent-evals.svg)](https://pkg.go.dev/github.com/thinkwright/agent-evals)
 [![Downloads](https://img.shields.io/github/downloads/thinkwright/agent-evals/total?color=orange)](https://github.com/thinkwright/agent-evals/releases)
 [![Homebrew](https://img.shields.io/badge/homebrew-thinkwright%2Ftap-blueviolet)](https://github.com/thinkwright/homebrew-tap)
