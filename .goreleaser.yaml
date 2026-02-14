@@ -1,0 +1,39 @@
+version: 2
+
+builds:
+  - main: ./cmd/agent-evals
+    binary: agent-evals
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+brews:
+  - repository:
+      owner: thinkwright
+      name: homebrew-tap
+    homepage: "https://thinkwright.ai/agent-evals"
+    description: "Evaluate, test, and maintain your LLM coding agent configurations"
+    license: "MIT"
+    install: |
+      bin.install "agent-evals"

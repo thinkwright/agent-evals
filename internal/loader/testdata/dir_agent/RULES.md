@@ -1,0 +1,2 @@
+- Follow platform-specific design guidelines
+- Test on both iOS and Android simulators

@@ -1,0 +1,19 @@
+domains:
+  - backend
+  - frontend
+  - devops
+  - databases
+  - security
+  - architecture
+  - api_design
+
+thresholds:
+  max_overlap_score: 0.3
+  min_calibration_score: 0.6
+  min_boundary_score: 0.5
+  max_refusal_suppression: 0.2
+
+probes:
+  budget: 200
+  model: claude-sonnet-4-5-20250514
+  stochastic_runs: 5
