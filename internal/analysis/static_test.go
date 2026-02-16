@@ -218,3 +218,35 @@ func TestOverallScoreCalculation(t *testing.T) {
 		t.Errorf("overall score should be in [0, 1], got %.2f", report.Overall)
 	}
 }
+
+func TestDomainSummaryBuiltinOnly(t *testing.T) {
+	agents := []loader.AgentDefinition{
+		{ID: "a", SystemPrompt: "You handle backend APIs."},
+	}
+	report := RunStaticAnalysis(agents, nil)
+
+	if report.DomainSummary != "18 built-in domains" {
+		t.Errorf("expected '18 built-in domains', got %q", report.DomainSummary)
+	}
+}
+
+func TestDomainSummaryMixed(t *testing.T) {
+	agents := []loader.AgentDefinition{
+		{ID: "a", SystemPrompt: "You handle payments via Stripe."},
+	}
+	config := map[string]any{
+		"domains": []any{
+			"backend",
+			"frontend",
+			map[string]any{
+				"name":     "payments",
+				"keywords": []any{"stripe", "plaid"},
+			},
+		},
+	}
+	report := RunStaticAnalysis(agents, config)
+
+	if report.DomainSummary != "2 built-in + 1 custom domains" {
+		t.Errorf("expected '2 built-in + 1 custom domains', got %q", report.DomainSummary)
+	}
+}
