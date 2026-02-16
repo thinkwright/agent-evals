@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -69,7 +68,7 @@ func (c *AnthropicClient) Complete(ctx context.Context, req CompletionRequest) (
 	if base == "" {
 		base = "https://api.anthropic.com/v1"
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", base+"/messages", bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", base+"/messages", nil)
 	if err != nil {
 		return CompletionResponse{}, err
 	}
@@ -78,7 +77,7 @@ func (c *AnthropicClient) Complete(ctx context.Context, req CompletionRequest) (
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
 	start := time.Now()
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := doWithRetry(ctx, http.DefaultClient, httpReq, payload, defaultMaxRetries)
 	latency := time.Since(start).Milliseconds()
 	if err != nil {
 		return CompletionResponse{}, fmt.Errorf("anthropic API call failed: %w", err)

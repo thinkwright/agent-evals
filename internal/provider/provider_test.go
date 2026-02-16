@@ -229,8 +229,8 @@ func TestAnthropicClientComplete(t *testing.T) {
 
 func TestOpenAIClientErrorResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte(`{"error": {"message": "rate limited"}}`))
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": {"message": "internal server error"}}`))
 	}))
 	defer server.Close()
 
@@ -243,7 +243,7 @@ func TestOpenAIClientErrorResponse(t *testing.T) {
 
 	_, err := client.Complete(context.Background(), CompletionRequest{UserPrompt: "hi"})
 	if err == nil {
-		t.Fatal("expected error for 429 response")
+		t.Fatal("expected error for 500 response")
 	}
 }
 
