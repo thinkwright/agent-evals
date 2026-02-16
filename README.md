@@ -42,7 +42,7 @@ agent-evals check ./agents/
 agent-evals test ./agents/ --provider anthropic
 ```
 
-The `check` command extracts domains from each agent's system prompt, computes pairwise overlap using Jaccard similarity and LCS-based prompt comparison, flags conflicts between overlapping agents, identifies coverage gaps across 19 recognized domain categories, and scores boundary awareness. It requires no API keys or network access.
+The `check` command extracts domains from each agent's system prompt, computes pairwise overlap using Jaccard similarity and LCS-based prompt comparison, flags conflicts between overlapping agents, identifies coverage gaps across 18 built-in domain categories (extensible via config), and scores boundary awareness. It requires no API keys or network access.
 
 The `test` command runs everything in `check`, then generates boundary questions tailored to each agent and sends them through your LLM provider. It measures whether agents hedge on out-of-scope questions, whether their self-reported confidence tracks actual capability, and whether responses stay consistent across repeated stochastic runs.
 
