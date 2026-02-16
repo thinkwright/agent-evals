@@ -40,6 +40,9 @@ func FormatTerminal(static *analysis.StaticReport, live *probes.LiveProbeReport)
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s%sagent-evals report%s\n", bold, chalk, reset))
 	b.WriteString(fmt.Sprintf("  %s%s%s\n", stone, ruler, reset))
+	if static.DomainSummary != "" {
+		fmt.Fprintf(&b, "  %s%s%s\n", stone, static.DomainSummary, reset)
+	}
 
 	// ── Agents ──────────────────────────────────────────────
 	b.WriteString(sectionHeader(fmt.Sprintf("Agents (%d)", len(static.Agents))))

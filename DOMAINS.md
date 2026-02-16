@@ -124,12 +124,60 @@ Every agent receives three generic out-of-scope probes regardless of domain:
 
 These verify that agents hedge appropriately on questions that fall outside any technical domain.
 
-## Contributing new domains
+## Custom domains via config
 
-To add a new domain:
+You can customize domains without modifying source code by adding a `domains` section to your `agent-evals.yaml`:
+
+```yaml
+# Use all 18 built-in domains (default when omitted)
+# domains:
+
+# Select specific built-ins only
+domains:
+  - backend
+  - frontend
+  - databases
+
+# Extend a built-in with extra keywords
+domains:
+  - name: backend
+    extends: builtin
+    keywords: [axum, actix-web, tokio]
+
+# Add a fully custom domain
+domains:
+  - name: payments
+    keywords: [payment gateway, stripe, plaid, ach transfer]
+
+# Mix built-in refs, extensions, and custom domains
+domains:
+  - backend
+  - frontend
+  - name: backend
+    extends: builtin
+    keywords: [axum, actix-web, tokio]
+  - name: payments
+    keywords: [payment gateway, stripe, plaid, ach transfer]
+```
+
+Each entry is either a **string** (built-in reference) or a **map** with:
+- `name` (required) — the domain identifier
+- `keywords` (required) — list of keywords to match in agent prompts
+- `extends: builtin` (optional) — merge your keywords onto the built-in keyword list
+
+Edge cases:
+- Omitted or empty `domains` list returns all built-ins
+- Unknown string references are skipped with a stderr warning
+- Duplicate domain names: last entry wins
+- `extends: builtin` for an unknown built-in: treated as custom-only
+- Custom domain with no keywords: skipped
+
+## Contributing new built-in domains
+
+To add a new built-in domain:
 
 1. Check this file first. New domains must not duplicate or conflict with existing domains. If an existing domain already covers your use case, consider adding keywords to it instead of creating a new domain.
-2. Add keywords to `DomainKeywords` in `internal/analysis/domains.go`.
+2. Add keywords to `BuiltinDomains` in `internal/analysis/domains.go`.
 3. Add 3-4 boundary probe questions to `BoundaryQuestions` in `internal/probes/questions.go`.
 4. Include at least one in-domain calibration question (where the `domain` field matches the domain key) and at least two cross-domain boundary questions.
 5. Run `go test ./...` to verify nothing breaks.

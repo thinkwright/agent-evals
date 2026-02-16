@@ -74,6 +74,13 @@ domains:
   - frontend
   - databases
   - security
+  # Extend a built-in domain with extra keywords
+  - name: backend
+    extends: builtin
+    keywords: [axum, actix-web, tokio]
+  # Add a fully custom domain
+  - name: payments
+    keywords: [payment gateway, stripe, plaid, ach transfer]
 
 thresholds:
   min_overall_score: 0.7
@@ -85,7 +92,7 @@ probes:
   api_key_env: ANTHROPIC_API_KEY
 ```
 
-The `domains` field restricts analysis to specific domains rather than scanning all 19 recognized categories. The `thresholds` section controls CI exit codes when using `--ci`. The `probes` section provides defaults for provider, model, and API key configuration, which can be overridden by CLI flags.
+The `domains` field configures which domains to analyze. Entries can be strings (built-in references), maps that extend a built-in with extra keywords (`extends: builtin`), or fully custom domains with their own keyword lists. Omit `domains` to use all 18 built-in domains. See [DOMAINS.md](DOMAINS.md) for the full list and customization details. The `thresholds` section controls CI exit codes when using `--ci`. The `probes` section provides defaults for provider, model, and API key configuration, which can be overridden by CLI flags.
 
 ## Providers
 
