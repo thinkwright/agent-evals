@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -68,7 +67,7 @@ func (c *OpenAIClient) Complete(ctx context.Context, req CompletionRequest) (Com
 	}
 
 	url := c.baseURL + "/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
 	if err != nil {
 		return CompletionResponse{}, err
 	}
@@ -78,7 +77,7 @@ func (c *OpenAIClient) Complete(ctx context.Context, req CompletionRequest) (Com
 	}
 
 	start := time.Now()
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := doWithRetry(ctx, http.DefaultClient, httpReq, payload, defaultMaxRetries)
 	latency := time.Since(start).Milliseconds()
 	if err != nil {
 		return CompletionResponse{}, fmt.Errorf("API call failed: %w", err)

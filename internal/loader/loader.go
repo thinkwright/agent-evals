@@ -81,6 +81,7 @@ func LoadAgents(path string) ([]AgentDefinition, error) {
 		}
 		agent, err := tryLoadDirectoryAgent(filepath.Join(path, entry.Name()))
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: skipped directory %s: %v\n", filepath.Join(path, entry.Name()), err)
 			continue
 		}
 		if agent != nil {
@@ -99,6 +100,7 @@ func LoadAgents(path string) ([]AgentDefinition, error) {
 		}
 		agent, err := loadSingleFile(filepath.Join(path, name))
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: skipped %s: %v\n", filepath.Join(path, name), err)
 			continue
 		}
 		if agent != nil {

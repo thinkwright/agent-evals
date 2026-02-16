@@ -17,13 +17,14 @@ type Issue struct {
 
 // StaticReport is the complete result of static analysis.
 type StaticReport struct {
-	Agents      []loader.AgentDefinition
-	DomainMap   map[string]map[string]float64
-	Overlaps    []OverlapResult
-	Gaps        []GapResult
-	AgentScores map[string]AgentScore
-	Issues      []Issue
-	Overall     float64
+	Agents        []loader.AgentDefinition
+	DomainMap     map[string]map[string]float64
+	DomainSummary string // e.g. "18 built-in domains" or "3 built-in + 2 custom domains"
+	Overlaps      []OverlapResult
+	Gaps          []GapResult
+	AgentScores   map[string]AgentScore
+	Issues        []Issue
+	Overall       float64
 }
 
 // HasFailures returns true if any issue is an error.
@@ -53,30 +54,26 @@ func RunStaticAnalysis(agents []loader.AgentDefinition, config map[string]any) *
 	}
 	thresholds := getMap(config, "thresholds")
 
+	// Resolve domain definitions from config
+	resolvedDomains := ResolveDomains(config)
+
 	// Extract domains for each agent
 	domainMap := make(map[string]map[string]float64)
 	for i := range agents {
-		domainMap[agents[i].ID] = ExtractDomains(&agents[i])
+		domainMap[agents[i].ID] = ExtractDomains(&agents[i], resolvedDomains)
 	}
 
 	// Pairwise overlap
 	overlaps := ComputeOverlaps(agents, domainMap)
 
-	// Collect all known domains
+	// Collect all known domains from resolved set and extraction results
 	allDomains := make(map[string]bool)
+	for d := range resolvedDomains {
+		allDomains[d] = true
+	}
 	for _, scores := range domainMap {
 		for d := range scores {
 			allDomains[d] = true
-		}
-	}
-	// Add configured domains
-	if configDomains, ok := config["domains"]; ok {
-		if ds, ok := configDomains.([]any); ok {
-			for _, d := range ds {
-				if s, ok := d.(string); ok {
-					allDomains[s] = true
-				}
-			}
 		}
 	}
 
@@ -112,14 +109,18 @@ func RunStaticAnalysis(agents []loader.AgentDefinition, config map[string]any) *
 		overall = 1.0
 	}
 
+	// Build domain source summary
+	domainSummary := buildDomainSummary(resolvedDomains)
+
 	return &StaticReport{
-		Agents:      agents,
-		DomainMap:   domainMap,
-		Overlaps:    overlaps,
-		Gaps:        gaps,
-		AgentScores: agentScores,
-		Issues:      issues,
-		Overall:     overall,
+		Agents:        agents,
+		DomainMap:     domainMap,
+		DomainSummary: domainSummary,
+		Overlaps:      overlaps,
+		Gaps:          gaps,
+		AgentScores:   agentScores,
+		Issues:        issues,
+		Overall:       overall,
 	}
 }
 
@@ -250,4 +251,20 @@ func getFloat(m map[string]any, key string, fallback float64) float64 {
 		return float64(val)
 	}
 	return fallback
+}
+
+func buildDomainSummary(resolved map[string][]string) string {
+	builtinCount := 0
+	customCount := 0
+	for name := range resolved {
+		if _, ok := BuiltinDomains[name]; ok {
+			builtinCount++
+		} else {
+			customCount++
+		}
+	}
+	if customCount == 0 {
+		return fmt.Sprintf("%d built-in domains", builtinCount)
+	}
+	return fmt.Sprintf("%d built-in + %d custom domains", builtinCount, customCount)
 }

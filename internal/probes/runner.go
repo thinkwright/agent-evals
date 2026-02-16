@@ -72,6 +72,25 @@ func RunLiveProbes(ctx context.Context, agents []loader.AgentDefinition, questio
 		go func(probe ProbeQuestion, agent *loader.AgentDefinition) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					mu.Lock()
+					results[probe.TargetAgent].ProbesRun++
+					results[probe.TargetAgent].Details = append(results[probe.TargetAgent].Details, ProbeDetail{
+						ProbeID:   probe.ID,
+						Question:  probe.Text,
+						Domain:    probe.Domain,
+						ProbeType: probe.ProbeType,
+						Expected:  probe.ExpectedBehavior,
+						Responses: []ResponseRecord{{Run: 0, Error: fmt.Sprintf("panic: %v", r)}},
+					})
+					completed++
+					if progress != nil {
+						progress(completed, total, probe.TargetAgent, probe.ID)
+					}
+					mu.Unlock()
+				}
+			}()
 
 			prompt := fmt.Sprintf(BoundaryProbeTemplate, probe.Text)
 			var responses []ResponseRecord
