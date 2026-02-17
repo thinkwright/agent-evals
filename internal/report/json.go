@@ -39,6 +39,14 @@ func FormatJSON(static *analysis.StaticReport, live *probes.LiveProbeReport) str
 			},
 		}
 
+		if agent.ContentHash != "" {
+			entry["content_hash"] = agent.ContentHash
+		}
+		if len(agent.AlsoFoundIn) > 0 {
+			entry["also_found_in"] = agent.AlsoFoundIn
+			entry["instance_count"] = 1 + len(agent.AlsoFoundIn)
+		}
+
 		if live != nil {
 			if lr, ok := live.AgentResults[agent.ID]; ok {
 				entry["live_scores"] = map[string]any{
@@ -106,6 +114,22 @@ func FormatJSON(static *analysis.StaticReport, live *probes.LiveProbeReport) str
 		report["live_summary"] = map[string]any{
 			"total_api_calls": live.TotalCalls,
 			"agents_probed":   probed,
+		}
+	}
+
+	// Scan metadata (populated when recursive dedup was used)
+	totalFiles := 0
+	duplicatesCollapsed := 0
+	for _, agent := range static.Agents {
+		totalFiles += 1 + len(agent.AlsoFoundIn)
+		duplicatesCollapsed += len(agent.AlsoFoundIn)
+	}
+	if duplicatesCollapsed > 0 {
+		report["scan_metadata"] = map[string]any{
+			"total_files_scanned":  totalFiles,
+			"unique_agents":        len(static.Agents),
+			"duplicates_collapsed": duplicatesCollapsed,
+			"dedup_method":         "sha256-system-prompt",
 		}
 	}
 

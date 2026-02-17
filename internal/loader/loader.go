@@ -1,8 +1,11 @@
 package loader
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,6 +24,8 @@ type AgentDefinition struct {
 	Rules          []string
 	ClaimedDomains []string
 	Metadata       map[string]any
+	ContentHash    string   // SHA-256 hex of SystemPrompt
+	AlsoFoundIn    []string // other source paths with identical content (populated by dedup)
 }
 
 // FullContext returns the complete text that defines this agent's behavior.
@@ -394,4 +399,111 @@ func filterKeys(m map[string]any, exclude ...string) map[string]any {
 		return nil
 	}
 	return result
+}
+
+// LoadAgentsRecursive walks the directory tree rooted at path, loading agent
+// definitions from all supported file types. When dedup is true, agents with
+// identical system prompts are collapsed into a single representative with
+// AlsoFoundIn populated.
+func LoadAgentsRecursive(path string, dedup bool) ([]AgentDefinition, error) {
+	absRoot, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve path: %w", err)
+	}
+
+	info, err := os.Stat(absRoot)
+	if err != nil {
+		return nil, fmt.Errorf("agent path not found: %s", path)
+	}
+	if !info.IsDir() {
+		return LoadAgents(path)
+	}
+
+	var allAgents []AgentDefinition
+
+	err = filepath.WalkDir(absRoot, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		name := d.Name()
+		if name == "agent-evals.yaml" || name == "agent-evals.yml" {
+			return nil
+		}
+		agent, loadErr := loadSingleFile(p)
+		if loadErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: skipped %s: %v\n", p, loadErr)
+			return nil
+		}
+		if agent != nil {
+			relPath, _ := filepath.Rel(absRoot, p)
+			agent.SourcePath = relPath
+			agent.ContentHash = computeContentHash(agent.SystemPrompt)
+			allAgents = append(allAgents, *agent)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if dedup {
+		allAgents = deduplicateAgents(allAgents)
+	} else {
+		allAgents = qualifyConflictingIDs(allAgents)
+	}
+
+	return allAgents, nil
+}
+
+func computeContentHash(prompt string) string {
+	h := sha256.Sum256([]byte(prompt))
+	return hex.EncodeToString(h[:])
+}
+
+func deduplicateAgents(agents []AgentDefinition) []AgentDefinition {
+	groups := make(map[string][]int) // hash → indices
+	var order []string
+
+	for i, a := range agents {
+		if _, seen := groups[a.ContentHash]; !seen {
+			order = append(order, a.ContentHash)
+		}
+		groups[a.ContentHash] = append(groups[a.ContentHash], i)
+	}
+
+	var result []AgentDefinition
+	for _, hash := range order {
+		indices := groups[hash]
+		rep := agents[indices[0]]
+		for _, idx := range indices[1:] {
+			rep.AlsoFoundIn = append(rep.AlsoFoundIn, agents[idx].SourcePath)
+		}
+		result = append(result, rep)
+	}
+
+	return qualifyConflictingIDs(result)
+}
+
+func qualifyConflictingIDs(agents []AgentDefinition) []AgentDefinition {
+	idCount := make(map[string]int)
+	for _, a := range agents {
+		idCount[a.ID]++
+	}
+
+	for i := range agents {
+		if idCount[agents[i].ID] > 1 {
+			dir := filepath.Dir(agents[i].SourcePath)
+			if dir != "." && dir != "" {
+				agents[i].ID = filepath.ToSlash(dir) + "/" + agents[i].ID
+			}
+		}
+	}
+
+	return agents
 }

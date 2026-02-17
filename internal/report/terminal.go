@@ -44,6 +44,16 @@ func FormatTerminal(static *analysis.StaticReport, live *probes.LiveProbeReport)
 		fmt.Fprintf(&b, "  %s%s%s\n", stone, static.DomainSummary, reset)
 	}
 
+	// Dedup summary
+	dupes := 0
+	for _, a := range static.Agents {
+		dupes += len(a.AlsoFoundIn)
+	}
+	if dupes > 0 {
+		fmt.Fprintf(&b, "  %s%d unique agents (%d duplicates collapsed from %d files)%s\n",
+			stone, len(static.Agents), dupes, len(static.Agents)+dupes, reset)
+	}
+
 	// ── Agents ──────────────────────────────────────────────
 	b.WriteString(sectionHeader(fmt.Sprintf("Agents (%d)", len(static.Agents))))
 

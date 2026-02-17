@@ -323,3 +323,206 @@ func containsStr(s, sub string) bool {
 	}
 	return false
 }
+
+// ── Recursive loading + dedup tests ─────────────────────────
+
+func TestContentHash(t *testing.T) {
+	hash := computeContentHash("hello world")
+	if len(hash) != 64 {
+		t.Errorf("expected 64-char hex hash, got %d chars", len(hash))
+	}
+	// Same input → same hash
+	if hash != computeContentHash("hello world") {
+		t.Error("expected deterministic hash")
+	}
+	// Different input → different hash
+	if hash == computeContentHash("hello world!") {
+		t.Error("different inputs should produce different hashes")
+	}
+}
+
+func TestDeduplicateAgents(t *testing.T) {
+	agents := []AgentDefinition{
+		{ID: "agent-a", SourcePath: "dir1/agent-a.md", SystemPrompt: "prompt A", ContentHash: computeContentHash("prompt A")},
+		{ID: "agent-a", SourcePath: "dir2/agent-a.md", SystemPrompt: "prompt A", ContentHash: computeContentHash("prompt A")},
+		{ID: "agent-b", SourcePath: "dir1/agent-b.md", SystemPrompt: "prompt B", ContentHash: computeContentHash("prompt B")},
+	}
+
+	result := deduplicateAgents(agents)
+
+	if len(result) != 2 {
+		t.Fatalf("expected 2 unique agents, got %d", len(result))
+	}
+
+	// First agent should have AlsoFoundIn
+	if result[0].ID != "agent-a" {
+		t.Errorf("expected first agent ID = agent-a, got %q", result[0].ID)
+	}
+	if len(result[0].AlsoFoundIn) != 1 || result[0].AlsoFoundIn[0] != "dir2/agent-a.md" {
+		t.Errorf("expected AlsoFoundIn = [dir2/agent-a.md], got %v", result[0].AlsoFoundIn)
+	}
+
+	// Second agent should have no dupes
+	if result[1].ID != "agent-b" {
+		t.Errorf("expected second agent ID = agent-b, got %q", result[1].ID)
+	}
+	if len(result[1].AlsoFoundIn) != 0 {
+		t.Errorf("expected no AlsoFoundIn for agent-b, got %v", result[1].AlsoFoundIn)
+	}
+}
+
+func TestQualifyConflictingIDs(t *testing.T) {
+	agents := []AgentDefinition{
+		{ID: "architect", SourcePath: "plugin-a/agents/architect.md"},
+		{ID: "architect", SourcePath: "plugin-b/agents/architect.md"},
+		{ID: "unique", SourcePath: "plugin-c/agents/unique.md"},
+	}
+
+	result := qualifyConflictingIDs(agents)
+
+	if result[0].ID != "plugin-a/agents/architect" {
+		t.Errorf("expected qualified ID, got %q", result[0].ID)
+	}
+	if result[1].ID != "plugin-b/agents/architect" {
+		t.Errorf("expected qualified ID, got %q", result[1].ID)
+	}
+	if result[2].ID != "unique" {
+		t.Errorf("expected unqualified ID for unique agent, got %q", result[2].ID)
+	}
+}
+
+func TestLoadAgentsRecursive(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("recursive"), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 5 non-hidden agents: 3x backend-architect + data-engineer + frontend-dev
+	if len(agents) != 5 {
+		t.Errorf("expected 5 agents, got %d", len(agents))
+		for _, a := range agents {
+			t.Logf("  loaded: %s (%s)", a.ID, a.SourcePath)
+		}
+	}
+}
+
+func TestRecursiveDedup(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("recursive"), true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// After dedup: plugin-a and plugin-b backend-architect collapse (identical content),
+	// plugin-c backend-architect survives (different content), plus data-engineer and frontend-dev = 4
+	if len(agents) != 4 {
+		t.Errorf("expected 4 unique agents after dedup, got %d", len(agents))
+		for _, a := range agents {
+			t.Logf("  agent: %s (hash=%s, also=%v)", a.ID, a.ContentHash[:8], a.AlsoFoundIn)
+		}
+	}
+
+	// Find the deduplicated backend-architect (the one with AlsoFoundIn)
+	var dedupedArchitect *AgentDefinition
+	for i := range agents {
+		if len(agents[i].AlsoFoundIn) > 0 {
+			dedupedArchitect = &agents[i]
+			break
+		}
+	}
+	if dedupedArchitect == nil {
+		t.Fatal("expected one agent with AlsoFoundIn populated")
+	}
+	if len(dedupedArchitect.AlsoFoundIn) != 1 {
+		t.Errorf("expected 1 entry in AlsoFoundIn, got %d: %v", len(dedupedArchitect.AlsoFoundIn), dedupedArchitect.AlsoFoundIn)
+	}
+
+	// The two backend-architects with different content should have qualified IDs
+	ids := make(map[string]bool)
+	for _, a := range agents {
+		ids[a.ID] = true
+	}
+	if ids["backend-architect"] {
+		t.Error("conflicting backend-architect IDs should be qualified, not bare")
+	}
+}
+
+func TestRecursiveNoDedup(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("recursive"), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(agents) != 5 {
+		t.Fatalf("expected 5 agents without dedup, got %d", len(agents))
+	}
+
+	// All 3 backend-architect instances should have qualified IDs
+	architectCount := 0
+	for _, a := range agents {
+		if containsStr(a.ID, "backend-architect") {
+			architectCount++
+		}
+	}
+	if architectCount != 3 {
+		t.Errorf("expected 3 backend-architect variants, got %d", architectCount)
+	}
+}
+
+func TestRecursiveRelativePaths(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("recursive"), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, a := range agents {
+		if filepath.IsAbs(a.SourcePath) {
+			t.Errorf("expected relative path, got absolute: %s", a.SourcePath)
+		}
+	}
+}
+
+func TestRecursiveSkipsHiddenDirs(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("recursive"), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, a := range agents {
+		if containsStr(a.SourcePath, ".hidden") {
+			t.Errorf("agent from hidden directory should be skipped: %s", a.SourcePath)
+		}
+		if a.Name == "secret-agent" {
+			t.Error("secret-agent from .hidden/ should not be loaded")
+		}
+	}
+}
+
+func TestRecursiveContentHashPopulated(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("recursive"), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, a := range agents {
+		if a.ContentHash == "" {
+			t.Errorf("agent %q has empty ContentHash", a.ID)
+		}
+		if len(a.ContentHash) != 64 {
+			t.Errorf("agent %q ContentHash length = %d, want 64", a.ID, len(a.ContentHash))
+		}
+	}
+}
+
+func TestRecursiveSingleFile(t *testing.T) {
+	agents, err := LoadAgentsRecursive(testdataPath("security_agent.md"), true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent from single file, got %d", len(agents))
+	}
+	if agents[0].Name != "Security Agent" {
+		t.Errorf("Name = %q, want %q", agents[0].Name, "Security Agent")
+	}
+}

@@ -38,6 +38,9 @@ agent-evals reads agent definitions from a directory and runs analysis against t
 # Static analysis only (no API calls, no credentials)
 agent-evals check ./agents/
 
+# Recursively scan a nested agent repository (with automatic dedup)
+agent-evals check -r ./plugins/
+
 # Static analysis + live boundary probes
 agent-evals test ./agents/ --provider anthropic
 ```
@@ -62,6 +65,20 @@ system_prompt: |
 ```
 
 Supported formats include YAML, JSON, Markdown with frontmatter, plain text files, and directory-based agents where `AGENT.md`, `RULES.md`, and `SKILLS.md` files are combined into a single definition. The loader accepts fields named `system_prompt`, `prompt`, `system`, `instructions`, or `content` for the agent's prompt text.
+
+## Recursive Scanning
+
+For large, nested agent repositories (e.g. plugin ecosystems with agents organized in subdirectories), use `--recursive` to walk the entire directory tree.
+
+```sh
+# Scan all .md/.yaml/.json/.txt files recursively
+agent-evals check -r ./plugins/
+
+# Disable deduplication to see every file individually
+agent-evals check -r --no-dedup ./plugins/
+```
+
+Recursive mode automatically deduplicates agents by content hash (SHA-256 of the system prompt). When identical agents appear in multiple directories, one is kept as the representative and the others are recorded in `also_found_in`. Agents with the same filename but different content get qualified IDs (e.g. `plugin-a/agents/architect` vs `plugin-b/agents/architect`). JSON output includes a `scan_metadata` block with file counts and dedup statistics. Hidden directories (starting with `.`) are skipped.
 
 ## Configuration
 
@@ -126,6 +143,8 @@ agent-evals test ./agents/ \
 | `--config` | auto-discover | Path to `agent-evals.yaml` |
 | `-o, --output` | stdout | Write report to file |
 | `--no-pager` | `false` | Disable automatic paging |
+| `-r, --recursive` | `false` | Recursively scan nested directories for agent definitions |
+| `--no-dedup` | `false` | Disable content-hash deduplication (only with `--recursive`) |
 
 ### Test-Only Flags
 

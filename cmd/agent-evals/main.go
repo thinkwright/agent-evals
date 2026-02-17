@@ -29,11 +29,13 @@ func main() {
 
 	// Shared flags
 	var (
-		flagCI      bool
-		flagFormat  string
-		flagConfig  string
-		flagOutput  string
-		flagNoPager bool
+		flagCI        bool
+		flagFormat    string
+		flagConfig    string
+		flagOutput    string
+		flagNoPager   bool
+		flagRecursive bool
+		flagNoDedup   bool
 	)
 
 	// ── check command ────────────────────────────────────────────
@@ -50,7 +52,7 @@ func main() {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			agents, err := loader.LoadAgents(agentsPath)
+			agents, err := loadAgents(agentsPath, flagRecursive, flagNoDedup)
 			if err != nil {
 				return fmt.Errorf("load agents: %w", err)
 			}
@@ -58,7 +60,7 @@ func main() {
 				return fmt.Errorf("no agent definitions found in %s", agentsPath)
 			}
 
-			fmt.Fprintf(os.Stderr, "Loaded %d agent(s) from %s\n", len(agents), agentsPath)
+			printLoadSummary(agents, agentsPath, flagRecursive)
 
 			staticReport := analysis.RunStaticAnalysis(agents, cfg)
 
@@ -78,6 +80,8 @@ func main() {
 	checkCmd.Flags().StringVar(&flagConfig, "config", "", "Path to agent-evals.yaml config")
 	checkCmd.Flags().StringVarP(&flagOutput, "output", "o", "", "Write report to file")
 	checkCmd.Flags().BoolVar(&flagNoPager, "no-pager", false, "Disable automatic paging")
+	checkCmd.Flags().BoolVarP(&flagRecursive, "recursive", "r", false, "Recursively scan nested directories for agent definitions")
+	checkCmd.Flags().BoolVar(&flagNoDedup, "no-dedup", false, "Disable content-hash deduplication (only with --recursive)")
 
 	// ── test command ─────────────────────────────────────────────
 	var (
@@ -104,7 +108,7 @@ func main() {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			agents, err := loader.LoadAgents(agentsPath)
+			agents, err := loadAgents(agentsPath, flagRecursive, flagNoDedup)
 			if err != nil {
 				return fmt.Errorf("load agents: %w", err)
 			}
@@ -112,7 +116,7 @@ func main() {
 				return fmt.Errorf("no agent definitions found in %s", agentsPath)
 			}
 
-			fmt.Fprintf(os.Stderr, "Loaded %d agent(s) from %s\n", len(agents), agentsPath)
+			printLoadSummary(agents, agentsPath, flagRecursive)
 
 			// Static analysis
 			staticReport := analysis.RunStaticAnalysis(agents, cfg)
@@ -181,11 +185,36 @@ func main() {
 	testCmd.Flags().IntVar(&flagStochasticRuns, "stochastic-runs", 5, "Stochastic runs per probe")
 	testCmd.Flags().IntVar(&flagConcurrency, "concurrency", 3, "Max concurrent API calls")
 	testCmd.Flags().StringVar(&flagTranscript, "transcript", "", "Write full probe Q&A transcript to file (markdown)")
+	testCmd.Flags().BoolVarP(&flagRecursive, "recursive", "r", false, "Recursively scan nested directories for agent definitions")
+	testCmd.Flags().BoolVar(&flagNoDedup, "no-dedup", false, "Disable content-hash deduplication (only with --recursive)")
 
 	root.AddCommand(checkCmd, testCmd)
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
+	}
+}
+
+func loadAgents(path string, recursive, noDedup bool) ([]loader.AgentDefinition, error) {
+	if recursive {
+		return loader.LoadAgentsRecursive(path, !noDedup)
+	}
+	return loader.LoadAgents(path)
+}
+
+func printLoadSummary(agents []loader.AgentDefinition, path string, recursive bool) {
+	if !recursive {
+		fmt.Fprintf(os.Stderr, "Loaded %d agent(s) from %s\n", len(agents), path)
+		return
+	}
+	dupes := 0
+	for _, a := range agents {
+		dupes += len(a.AlsoFoundIn)
+	}
+	if dupes > 0 {
+		fmt.Fprintf(os.Stderr, "Loaded %d unique agent(s) from %s (%d duplicates collapsed)\n", len(agents), path, dupes)
+	} else {
+		fmt.Fprintf(os.Stderr, "Loaded %d agent(s) from %s (recursive)\n", len(agents), path)
 	}
 }
 
