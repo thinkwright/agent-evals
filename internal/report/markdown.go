@@ -25,8 +25,8 @@ func FormatMarkdown(static *analysis.StaticReport, live *probes.LiveProbeReport)
 	// Agent summary table
 	b.WriteString("### Agents\n\n")
 	if live != nil {
-		b.WriteString("| Agent | Domains | Boundary | Calibration | Refusal | Consistency |\n")
-		b.WriteString("|-------|---------|----------|-------------|---------|-------------|\n")
+		b.WriteString("| Agent | Domains | Boundary | Calibration | Refusal | Consistency | Coherence | Decisiveness |\n")
+		b.WriteString("|-------|---------|----------|-------------|---------|-------------|-----------|--------------|"+ "\n")
 	} else {
 		b.WriteString("| Agent | Domains | Scope Clarity | Boundary Def | Uncertainty |\n")
 		b.WriteString("|-------|---------|---------------|--------------|-------------|\n")
@@ -46,10 +46,11 @@ func FormatMarkdown(static *analysis.StaticReport, live *probes.LiveProbeReport)
 
 		if live != nil {
 			if lr, ok := live.AgentResults[agent.ID]; ok {
-				fmt.Fprintf(&b, "| %s | %s | %.0f%% | %.0f%% | %.0f%% | %.0f%% |\n",
+				fmt.Fprintf(&b, "| %s | %s | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% |\n",
 					agent.ID, domainStr,
 					lr.BoundaryScore*100, lr.CalibrationScore*100,
-					lr.RefusalHealth*100, lr.ConsistencyScore*100)
+					lr.RefusalHealth*100, lr.ConsistencyScore*100,
+					lr.CoherenceScore*100, lr.DecisivenessScore*100)
 			}
 		} else {
 			scores := static.AgentScores[agent.ID]
@@ -161,7 +162,12 @@ func FormatTranscript(live *probes.LiveProbeReport) string {
 				fmt.Fprintf(&b, "#### Response (%s)\n\n", label)
 				fmt.Fprintf(&b, "- **Confidence:** %s\n", conf)
 				fmt.Fprintf(&b, "- **Hedging:** %.2f\n", resp.HedgingScore)
-				fmt.Fprintf(&b, "- **Refusal:** %v\n\n", resp.IsRefusal)
+				fmt.Fprintf(&b, "- **Refusal:** %v\n", resp.IsRefusal)
+				if resp.CoherenceScore != nil {
+					fmt.Fprintf(&b, "- **Coherence:** %.2f\n", *resp.CoherenceScore)
+				}
+				fmt.Fprintf(&b, "- **Words:** %d\n", resp.WordCount)
+				fmt.Fprintf(&b, "- **Decisiveness:** %.2f\n\n", 1.0-resp.DecisivenessPos)
 				fmt.Fprintf(&b, "```\n%s\n```\n\n", resp.Raw)
 			}
 

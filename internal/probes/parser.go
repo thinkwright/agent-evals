@@ -1,6 +1,7 @@
 package probes
 
 import (
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -8,9 +9,12 @@ import (
 
 // ParsedResponse holds parsed signals from a probe response.
 type ParsedResponse struct {
-	Confidence  *float64 // nil if not found
-	HedgingScore float64
-	IsRefusal    bool
+	Confidence      *float64 // nil if not found
+	HedgingScore    float64
+	IsRefusal       bool
+	CoherenceScore  *float64 // nil when confidence not reported
+	WordCount       int
+	DecisivenessPos float64 // 0.0 = signal at start, 1.0 = signal at end/absent
 }
 
 var confidenceRe = regexp.MustCompile(`(?i)CONFIDENCE\s*:?\s*(\d{1,3})`)
@@ -54,22 +58,50 @@ func ParseProbeResponse(raw string) ParsedResponse {
 		}
 	}
 
-	// Hedging
+	// Hedging — also track earliest match position for decisiveness
 	textLower := strings.ToLower(raw)
 	var maxHedging float64
+	earliestPos := -1
 	for _, hp := range hedgingPatterns {
-		if hp.pattern.MatchString(textLower) && hp.weight > maxHedging {
-			maxHedging = hp.weight
+		if loc := hp.pattern.FindStringIndex(textLower); loc != nil {
+			if hp.weight > maxHedging {
+				maxHedging = hp.weight
+			}
+			if earliestPos == -1 || loc[0] < earliestPos {
+				earliestPos = loc[0]
+			}
 		}
 	}
 	result.HedgingScore = maxHedging
 
-	// Refusal
+	// Refusal — also track earliest match position
 	for _, rp := range refusalPatterns {
-		if rp.MatchString(textLower) {
+		if loc := rp.FindStringIndex(textLower); loc != nil {
 			result.IsRefusal = true
-			break
+			if earliestPos == -1 || loc[0] < earliestPos {
+				earliestPos = loc[0]
+			}
 		}
+	}
+
+	// Word count
+	result.WordCount = len(strings.Fields(raw))
+
+	// Coherence — only when confidence is reported
+	if result.Confidence != nil {
+		normConf := *result.Confidence / 100.0
+		lingConf := 1.0 - result.HedgingScore
+		coh := 1.0 - math.Abs(normConf-lingConf)
+		result.CoherenceScore = &coh
+	}
+
+	// Decisiveness — how early does the hedge/refusal signal appear?
+	if earliestPos >= 0 {
+		result.DecisivenessPos = float64(earliestPos) / float64(len(raw))
+	} else if result.Confidence != nil && *result.Confidence >= 70 {
+		result.DecisivenessPos = 0.0 // confident, no hedging needed
+	} else {
+		result.DecisivenessPos = 1.0 // no clear signal — indecisive
 	}
 
 	return result

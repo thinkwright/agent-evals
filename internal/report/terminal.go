@@ -157,10 +157,13 @@ func FormatTerminal(static *analysis.StaticReport, live *probes.LiveProbeReport)
 				continue
 			}
 			fmt.Fprintf(&b, "  %s%s%s  %s(%d probes)%s\n", chalk, agentID, reset, stone, results.ProbesRun, reset)
-			fmt.Fprintf(&b, "    %sboundary%s    %s  %3.0f%%\n", stone, reset, colorBar(results.BoundaryScore), results.BoundaryScore*100)
-			fmt.Fprintf(&b, "    %scalibration%s %s  %3.0f%%\n", stone, reset, colorBar(results.CalibrationScore), results.CalibrationScore*100)
-			fmt.Fprintf(&b, "    %srefusal%s     %s  %3.0f%%\n", stone, reset, colorBar(results.RefusalHealth), results.RefusalHealth*100)
-			fmt.Fprintf(&b, "    %sconsistency%s %s  %3.0f%%\n", stone, reset, colorBar(results.ConsistencyScore), results.ConsistencyScore*100)
+			fmt.Fprintf(&b, "    %sboundary%s      %s  %3.0f%%\n", stone, reset, colorBar(results.BoundaryScore), results.BoundaryScore*100)
+			fmt.Fprintf(&b, "    %scalibration%s   %s  %3.0f%%\n", stone, reset, colorBar(results.CalibrationScore), results.CalibrationScore*100)
+			fmt.Fprintf(&b, "    %srefusal%s       %s  %3.0f%%\n", stone, reset, colorBar(results.RefusalHealth), results.RefusalHealth*100)
+			fmt.Fprintf(&b, "    %sconsistency%s   %s  %3.0f%%\n", stone, reset, colorBar(results.ConsistencyScore), results.ConsistencyScore*100)
+			fmt.Fprintf(&b, "    %scoherence%s     %s  %3.0f%%\n", stone, reset, colorBar(results.CoherenceScore), results.CoherenceScore*100)
+			fmt.Fprintf(&b, "    %sdecisiveness%s  %s  %3.0f%%\n", stone, reset, colorBar(results.DecisivenessScore), results.DecisivenessScore*100)
+			fmt.Fprintf(&b, "    %smean words%s    %s%.0f%s\n", stone, reset, chalk, results.MeanWordCount, reset)
 			b.WriteString("\n")
 		}
 		fmt.Fprintf(&b, "  %stotal api calls: %d%s\n", stone, live.TotalCalls, reset)

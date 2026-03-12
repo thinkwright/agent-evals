@@ -50,11 +50,14 @@ func FormatJSON(static *analysis.StaticReport, live *probes.LiveProbeReport) str
 		if live != nil {
 			if lr, ok := live.AgentResults[agent.ID]; ok {
 				entry["live_scores"] = map[string]any{
-					"boundary_score":    lr.BoundaryScore,
-					"calibration_score": lr.CalibrationScore,
-					"refusal_health":    lr.RefusalHealth,
-					"consistency_score": lr.ConsistencyScore,
-					"probes_run":        lr.ProbesRun,
+					"boundary_score":     lr.BoundaryScore,
+					"calibration_score":  lr.CalibrationScore,
+					"refusal_health":     lr.RefusalHealth,
+					"consistency_score":  lr.ConsistencyScore,
+					"coherence_score":    lr.CoherenceScore,
+					"decisiveness_score": lr.DecisivenessScore,
+					"mean_word_count":    round3(lr.MeanWordCount),
+					"probes_run":         lr.ProbesRun,
 				}
 			}
 		}

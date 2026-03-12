@@ -110,12 +110,15 @@ func RunLiveProbes(ctx context.Context, agents []loader.AgentDefinition, questio
 			} else {
 				parsed := ParseProbeResponse(resp.Text)
 				responses = append(responses, ResponseRecord{
-					Run:          0,
-					Temperature:  0,
-					Confidence:   parsed.Confidence,
-					HedgingScore: parsed.HedgingScore,
-					IsRefusal:    parsed.IsRefusal,
-					Raw:          resp.Text,
+					Run:             0,
+					Temperature:     0,
+					Confidence:      parsed.Confidence,
+					HedgingScore:    parsed.HedgingScore,
+					IsRefusal:       parsed.IsRefusal,
+					Raw:             resp.Text,
+					CoherenceScore:  parsed.CoherenceScore,
+					WordCount:       parsed.WordCount,
+					DecisivenessPos: parsed.DecisivenessPos,
 				})
 			}
 
@@ -135,12 +138,15 @@ func RunLiveProbes(ctx context.Context, agents []loader.AgentDefinition, questio
 				} else {
 					parsed := ParseProbeResponse(resp.Text)
 					responses = append(responses, ResponseRecord{
-						Run:          i,
-						Temperature:  0.7,
-						Confidence:   parsed.Confidence,
-						HedgingScore: parsed.HedgingScore,
-						IsRefusal:    parsed.IsRefusal,
-						Raw:          resp.Text,
+						Run:             i,
+						Temperature:     0.7,
+						Confidence:      parsed.Confidence,
+						HedgingScore:    parsed.HedgingScore,
+						IsRefusal:       parsed.IsRefusal,
+						Raw:             resp.Text,
+						CoherenceScore:  parsed.CoherenceScore,
+						WordCount:       parsed.WordCount,
+						DecisivenessPos: parsed.DecisivenessPos,
 					})
 				}
 

@@ -188,7 +188,43 @@ func main() {
 	testCmd.Flags().BoolVarP(&flagRecursive, "recursive", "r", false, "Recursively scan nested directories for agent definitions")
 	testCmd.Flags().BoolVar(&flagNoDedup, "no-dedup", false, "Disable content-hash deduplication (only with --recursive)")
 
-	root.AddCommand(checkCmd, testCmd)
+	// ── rescore command ──────────────────────────────────────────
+	var (
+		flagRescoreOutput     string
+		flagRescoreTranscript string
+	)
+
+	rescoreCmd := &cobra.Command{
+		Use:   "rescore <report.json>",
+		Short: "Re-score an existing report with behavioral trace metrics (no API calls)",
+		Long: `Reads a JSON report produced by 'agent-evals test', re-parses all raw
+LLM responses to compute coherence, decisiveness, and word count metrics,
+then writes an enriched JSON report. No API calls are made.
+
+If the report doesn't contain inline raw response text, provide the
+transcript file via --transcript to source the raw responses.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			enriched, err := probes.RescoreReport(args[0], flagRescoreTranscript)
+			if err != nil {
+				return err
+			}
+
+			if flagRescoreOutput != "" {
+				if err := os.WriteFile(flagRescoreOutput, enriched, 0644); err != nil {
+					return fmt.Errorf("write output: %w", err)
+				}
+				fmt.Fprintf(os.Stderr, "Enriched report written to %s\n", flagRescoreOutput)
+			} else {
+				fmt.Print(string(enriched))
+			}
+			return nil
+		},
+	}
+	rescoreCmd.Flags().StringVarP(&flagRescoreOutput, "output", "o", "", "Write enriched report to file")
+	rescoreCmd.Flags().StringVar(&flagRescoreTranscript, "transcript", "", "Path to probe transcript (markdown) for reports without inline raw text")
+
+	root.AddCommand(checkCmd, testCmd, rescoreCmd)
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
