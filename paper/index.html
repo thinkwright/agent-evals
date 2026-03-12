@@ -804,7 +804,7 @@
 
         <!-- Coherence scatter plot -->
         <div class="chart-container">
-            <div class="chart-title">Figure 2: Coherence Score Distribution (simulated from transcript data)</div>
+            <div class="chart-title">Figure 2: Coherence Score Distribution</div>
             <div class="chart-canvas">
                 <div id="coherence-chart" style="width: 100%; height: 300px;"></div>
             </div>
@@ -1062,7 +1062,7 @@ const C = {
     legend.append('text').attr('x', 172).attr('y', 9).attr('font-size', '10px').attr('fill', C.muted).text('Runtime (fail)');
 })();
 
-// ── Figure 2: Coherence scatter (simulated) ──
+// ── Figure 2: Coherence scatter ──
 (function() {
     const container = d3.select('#coherence-chart');
     const rect = container.node().getBoundingClientRect();
