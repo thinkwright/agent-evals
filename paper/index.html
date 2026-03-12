@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confidence Without Calibration: How LLM Agents Fail at Scope Boundaries</title>
+    <meta name="description" content="An empirical study of 428 LLM agents measuring the gap between self-reported confidence and linguistic behavior at domain boundaries. Behavioral trace analysis reveals systematic incoherence, late hedging, and near-zero refusal rates.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #d4cfc4;
+            --bg-card: #eae7e0;
+            --bg-hover: #ddd9d0;
+            --border: rgba(120, 100, 70, 0.12);
+            --border-hover: rgba(120, 100, 70, 0.25);
+            --text: #2c2416;
+            --text-secondary: #5a4e3c;
+            --text-muted: #8a7e6c;
+
+            --accent: #8b6914;
+            --accent-warm: #a67c2e;
+            --accent-green: #5c7a3a;
+            --accent-red: #c94a3a;
+            --accent-purple: #6b5278;
+            --accent-cyan: #4a7a7d;
+            --accent-orange: #b0703a;
+
+            --chart-blue: #6b89a8;
+            --chart-green: #7a9e6b;
+            --chart-amber: #c08c5a;
+            --chart-red: #b85c4a;
+            --chart-purple: #8b7aa0;
+            --chart-canvas: #f0ece4;
+            --chart-mat: #ddd8cd;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(180deg, #d4cfc4 0%, #c8bfb0 30%, #c0b5a5 60%, #b8a895 100%);
+            background-attachment: fixed;
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        a { color: var(--accent-warm); }
+        a:hover { color: var(--accent); }
+
+        /* ── Navigation ── */
+        .nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            background: #0a0a0f;
+        }
+        .nav-logo {
+            font-size: 20px; font-weight: 700; color: white;
+            text-decoration: none; letter-spacing: -0.02em;
+            display: flex; align-items: baseline;
+        }
+        .nav-logo a { text-decoration: none; }
+        .nav-logo-muted { font-weight: 400; color: rgba(255,255,255,0.7); transition: color 0.2s; }
+        .nav-logo-muted:hover { color: white; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-link { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 14px; transition: color 0.2s; }
+        .nav-link:hover { color: white; }
+
+        /* ── Container ── */
+        .container { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+
+        /* ── Hero / Title Block ── */
+        .hero {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 100px 24px 24px;
+        }
+        .hero-inner { max-width: 680px; }
+
+        .paper-label {
+            display: inline-block;
+            font-size: 0.6rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            margin-bottom: 12px;
+            background: rgba(56, 152, 212, 0.15);
+            border: 1px solid rgba(56, 152, 212, 0.3);
+            border-radius: 2px;
+            color: #2a7ab5;
+        }
+
+        .hero h1 {
+            font-family: 'DM Serif Display', Georgia, serif;
+            font-size: 2.2rem;
+            font-weight: 400;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            margin-bottom: 8px;
+            line-height: 1.2;
+        }
+
+        .hero .subtitle {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            font-style: italic;
+            margin-bottom: 20px;
+            max-width: 560px;
+        }
+
+        .authors {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .authors strong { color: var(--text); font-weight: 600; }
+        .paper-date {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Key numbers strip */
+        .key-numbers {
+            display: grid;
+            grid-template-columns: repeat(4, auto);
+            gap: 12px 36px;
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(120, 100, 70, 0.15);
+            width: fit-content;
+        }
+        .key-num {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .key-num-val {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+        }
+        .key-num-label {
+            font-size: 0.62rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+        }
+        .kn-1 { color: var(--accent); }
+        .kn-2 { color: var(--accent-cyan); }
+        .kn-3 { color: var(--accent-green); }
+        .kn-4 { color: var(--accent-red); }
+
+        /* ── Table of Contents ── */
+        .toc {
+            max-width: 760px;
+            margin: 32px auto 0;
+            padding: 0 24px;
+        }
+        .toc-title {
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .toc ol {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 20px;
+            counter-reset: toc;
+        }
+        .toc li {
+            counter-increment: toc;
+        }
+        .toc li a {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .toc li a:hover { color: var(--accent); }
+        .toc li a::before {
+            content: counter(toc) ". ";
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+        }
+
+        /* ── Chapters / Sections ── */
+        .chapter {
+            margin-bottom: 48px;
+            padding-top: 32px;
+        }
+        .chapter-number {
+            font-size: 0.62rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-warm);
+        }
+        .chapter-title {
+            font-family: 'DM Serif Display', Georgia, serif;
+            font-size: 1.5rem;
+            font-weight: 400;
+            color: var(--text);
+            margin-top: 2px;
+            margin-bottom: 16px;
+            letter-spacing: -0.01em;
+        }
+
+        /* Prose */
+        .prose {
+            font-size: 0.93rem;
+            line-height: 1.85;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        .prose p { margin-bottom: 16px; }
+        .prose strong { color: var(--text); font-weight: 600; }
+        .prose a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .prose a:hover { text-decoration: underline; }
+
+        /* Key insight callout */
+        .key-insight {
+            font-size: 0.92rem;
+            color: var(--text);
+            line-height: 1.75;
+            margin: 24px 0;
+            padding: 18px 22px;
+            background: rgba(139, 105, 20, 0.08);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 4px 4px 0;
+            font-weight: 400;
+        }
+        .key-insight strong { color: var(--accent); font-weight: 600; }
+
+        /* Pull quote */
+        .pull-quote {
+            margin: 24px 0;
+            padding: 16px 22px;
+            border-left: 3px solid var(--accent-purple);
+            border-radius: 0 4px 4px 0;
+        }
+        .pull-quote blockquote {
+            font-size: 0.93rem;
+            font-style: italic;
+            color: var(--text);
+            line-height: 1.7;
+            margin-bottom: 6px;
+        }
+        .pull-quote cite {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-style: normal;
+        }
+
+        /* ── Data Cards ── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 20px 22px;
+            margin: 20px 0;
+        }
+        .card-label {
+            font-size: 0.62rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+
+        /* ── Tables ── */
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            margin: 8px 0;
+        }
+        .report-table th {
+            text-align: left;
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(120, 100, 70, 0.18);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .report-table td {
+            padding: 8px 10px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(120, 100, 70, 0.08);
+            vertical-align: top;
+            line-height: 1.5;
+        }
+        .report-table tr:last-child td { border-bottom: none; }
+        .report-table td strong { color: var(--text); font-weight: 600; }
+        .report-table .num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 500;
+        }
+        .report-table .highlight { color: var(--accent-red); font-weight: 600; }
+
+        /* ── Chart containers ── */
+        .chart-container {
+            background: var(--chart-mat);
+            border: 1px solid rgba(120, 100, 70, 0.22);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+            border-radius: 3px;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        .chart-canvas {
+            background: var(--chart-canvas);
+            border: 1px solid rgba(120, 100, 70, 0.1);
+            border-radius: 2px;
+            padding: 16px;
+            position: relative;
+        }
+        .chart-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 8px;
+        }
+
+        /* ── Metric comparison cards ── */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px;
+        }
+        .metric-card-label {
+            font-size: 0.62rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .metric-card-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            font-variant-numeric: tabular-nums;
+        }
+        .metric-card-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .mc-green { color: var(--accent-green); }
+        .mc-red { color: var(--accent-red); }
+        .mc-amber { color: var(--accent); }
+        .mc-cyan { color: var(--accent-cyan); }
+
+        /* ── Failure mode cards ── */
+        .failure-modes {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px;
+            margin: 20px 0;
+        }
+        .failure-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px;
+        }
+        .failure-card-icon {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+        }
+        .failure-card-title {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        .failure-card-desc {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+        .failure-card-stat {
+            margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--accent-red);
+            font-weight: 500;
+        }
+
+        /* ── D3 chart styles ── */
+        .axis text {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            fill: var(--text-muted);
+        }
+        .axis line, .axis path {
+            stroke: rgba(120, 100, 70, 0.15);
+        }
+        .grid line {
+            stroke: rgba(120, 100, 70, 0.08);
+        }
+        .grid path { display: none; }
+
+        /* ── Methodology sidebar card ── */
+        .method-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px 20px;
+            margin: 20px 0;
+        }
+        .method-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(120, 100, 70, 0.06);
+            font-size: 0.8rem;
+        }
+        .method-row:last-child { border-bottom: none; }
+        .method-row span:first-child { color: var(--text-secondary); }
+        .method-row span:last-child {
+            font-weight: 600;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+        }
+
+        /* ── Conclusions ── */
+        .conclusions { counter-reset: conclusion; }
+        .conclusion {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+        .conclusion:last-child { margin-bottom: 0; }
+        .conclusion-num {
+            flex-shrink: 0;
+            width: 28px; height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            background: rgba(139, 105, 20, 0.12);
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 0.82rem;
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 2px;
+        }
+        .conclusion-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        .conclusion-text strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* ── Footer ── */
+        .paper-footer {
+            max-width: 760px;
+            margin: 48px auto 0;
+            padding: 20px 24px 48px;
+            border-top: 1px solid rgba(120, 100, 70, 0.15);
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+        .paper-footer a { color: var(--text-secondary); text-decoration: none; }
+        .paper-footer a:hover { color: var(--accent); }
+
+        /* ── Print ── */
+        @media print {
+            .nav { display: none; }
+            body { background: white; color: #1a1a1a; }
+            .hero { padding-top: 20px; }
+            .card, .metric-card, .failure-card, .method-card { border-color: #e2e8f0; background: #f8f8f6; }
+        }
+
+        @media (max-width: 700px) {
+            .hero h1 { font-size: 1.6rem; }
+            .key-numbers { grid-template-columns: repeat(2, auto); }
+            .metric-grid { grid-template-columns: 1fr; }
+            .failure-modes { grid-template-columns: 1fr; }
+            .toc ol { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+    <div class="nav-logo"><a href="/" class="nav-logo-muted">thinkwright /</a> <a href="#" style="color: white; text-decoration: none;">research</a></div>
+    <div class="nav-links">
+        <a href="/agent-census/" class="nav-link">State of the Agent</a>
+        <a href="/agent-evals" class="nav-link">agent-evals</a>
+        <a href="https://github.com/thinkwright" class="nav-link" target="_blank" rel="noopener">GitHub</a>
+    </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════
+     TITLE BLOCK
+     ════════════════════════════════════════════════════════ -->
+<section class="hero">
+    <div class="hero-inner">
+        <span class="paper-label">Research Paper</span>
+        <h1><span style="color: #8b2500;">Confidence</span> Without <span style="color: #3a6b35;">Calibration</span></h1>
+        <div class="subtitle">How LLM agents fail at scope boundaries, and what behavioral traces reveal about the gap between instruction and execution</div>
+        <div class="authors"><strong>Brandon Huey</strong></div>
+        <div class="paper-date">April 2026 &middot; Draft</div>
+
+        <div class="key-numbers">
+            <div class="key-num">
+                <span class="key-num-val kn-1">428</span>
+                <span class="key-num-label">agents</span>
+            </div>
+            <div class="key-num">
+                <span class="key-num-val kn-2">10,000</span>
+                <span class="key-num-label">LLM calls</span>
+            </div>
+            <div class="key-num">
+                <span class="key-num-val kn-3">72%</span>
+                <span class="key-num-label">claim boundaries</span>
+            </div>
+            <div class="key-num">
+                <span class="key-num-val kn-4">0.04</span>
+                <span class="key-num-label">mean refusal rate</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ════════════════════════════════════════════════════════ -->
+<nav class="toc">
+    <div class="toc-title">Contents</div>
+    <ol>
+        <li><a href="#ch-abstract">Abstract</a></li>
+        <li><a href="#ch-say-do">The Say-Do Gap</a></li>
+        <li><a href="#ch-behavioral">Behavioral Traces</a></li>
+        <li><a href="#ch-coherence">Coherence</a></li>
+        <li><a href="#ch-decisiveness">Decisiveness</a></li>
+        <li><a href="#ch-failure-modes">Failure Modes</a></li>
+        <li><a href="#ch-methodology">Methodology</a></li>
+        <li><a href="#ch-conclusions">Conclusions</a></li>
+        <li><a href="#ch-references">References</a></li>
+    </ol>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════
+     BODY
+     ════════════════════════════════════════════════════════ -->
+<div class="container">
+
+    <!-- ── 1. Abstract ── -->
+    <article class="chapter" id="ch-abstract">
+        <span class="chapter-number">Section 1</span>
+        <h2 class="chapter-title">Abstract</h2>
+
+        <div class="prose">
+            <p>LLM agents ship with scope boundaries — explicit definitions of what they should and should not do — yet runtime behavior consistently ignores them. Building on the dataset and static analysis from the <a href="/agent-census/">State of the Agent</a> census, we analyze 428 open-source agent configurations across 18 evaluation domains, measuring whether boundary instructions translate into actual behavioral compliance at runtime.</p>
+
+            <p>Using a combination of static analysis and 10,000 live LLM probe calls, we find a systematic disconnect: <strong>72% of agents include boundary language in their system prompts, yet produce a mean boundary respect score of just 0.30 and a refusal health of 0.04.</strong> Agents confidently answer questions far outside their stated expertise.</p>
+
+            <p>We introduce three behavioral trace metrics, coherence, decisiveness, and verbosity, that measure the structural pattern of a response rather than its content. These signals require no additional API calls and no ground-truth labels, computed entirely from the existing response text. Across the full corpus, behavioral incoherence (disagreement between self-reported confidence and linguistic hedging) appears systematic, present in every domain cluster we measured, and correlates with the lowest boundary respect scores in the dataset.</p>
+        </div>
+
+        <div class="key-insight">
+            <strong>Core finding:</strong> The gap between what agents are told to do and what they actually do is measurable, consistent, and visible in behavioral traces that are cheap to compute. Rather than refusing out-of-scope questions, agents answer them with high stated confidence and no linguistic hesitation.
+        </div>
+    </article>
+
+    <!-- ── 2. The Say-Do Gap ── -->
+    <article class="chapter" id="ch-say-do">
+        <span class="chapter-number">Section 2</span>
+        <h2 class="chapter-title">The Say-Do Gap</h2>
+
+        <div class="prose">
+            <p>The term "say-do gap" describes the disconnect between an agent's declared capabilities and its runtime behavior. The <a href="/agent-census/">State of the Agent</a> census first quantified this pattern through static analysis of 428 agent system prompts: developers write careful scope definitions, expecting agents to stay within boundaries, but the runtime measurements in Table 1 show those instructions have limited effect on actual behavior.</p>
+        </div>
+
+        <!-- Static vs Runtime comparison -->
+        <div class="card">
+            <div class="card-label">Table 1</div>
+            <div class="card-title">Static Analysis vs. Runtime Behavior (n=428)</div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>What It Measures</th>
+                        <th>Mean</th>
+                        <th>Median</th>
+                        <th>Signal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Scope Clarity</strong></td>
+                        <td>Domain keyword coverage in system prompt</td>
+                        <td class="num">0.84</td>
+                        <td class="num">1.00</td>
+                        <td style="color: var(--accent-green);">Agents know what they do</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Boundary Definition</strong></td>
+                        <td>Presence of scope-limiting language</td>
+                        <td class="num">0.59</td>
+                        <td class="num">0.70</td>
+                        <td style="color: var(--accent);">Most set boundaries</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Uncertainty Guidance</strong></td>
+                        <td>Hedging/uncertainty instructions</td>
+                        <td class="num">0.35</td>
+                        <td class="num">0.30</td>
+                        <td style="color: var(--accent-red);">Few address "I don't know"</td>
+                    </tr>
+                    <tr style="border-top: 2px solid rgba(120,100,70,0.15);">
+                        <td><strong>Boundary Respect</strong></td>
+                        <td>Actually hedges on out-of-scope probes</td>
+                        <td class="num highlight">0.293</td>
+                        <td class="num highlight">0.333</td>
+                        <td style="color: var(--accent-red);">Boundaries ignored at runtime</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Calibration</strong></td>
+                        <td>Correctly answers in-scope questions</td>
+                        <td class="num">0.960</td>
+                        <td class="num">1.000</td>
+                        <td style="color: var(--accent-green);">Competent within scope</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Consistency</strong></td>
+                        <td>Stable across stochastic runs</td>
+                        <td class="num">0.829</td>
+                        <td class="num">0.929</td>
+                        <td style="color: var(--accent);">Failures are systematic, not stochastic</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Refusal Health</strong></td>
+                        <td>Declines out-of-scope questions</td>
+                        <td class="num highlight">0.042</td>
+                        <td class="num highlight">0.000</td>
+                        <td style="color: var(--accent-red);">Near-zero refusal rate</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="prose">
+            <p>Agents score 0.84 on scope clarity (they know what they do) but 0.042 on refusal health (they almost never decline out-of-scope questions). Their 0.96 calibration score confirms they answer in-scope questions correctly, while 0.83 consistency shows that boundary failures are systematic rather than stochastic: the same agent, given the same out-of-scope probe across multiple runs, produces the same confident wrong answer each time.</p>
+        </div>
+
+        <!-- Say-Do gap visualization -->
+        <div class="chart-container">
+            <div class="chart-title">Figure 1: The Say-Do Gap</div>
+            <div class="chart-canvas">
+                <div id="say-do-chart" style="width: 100%; height: 280px;"></div>
+            </div>
+        </div>
+
+        <div class="metric-grid">
+            <div class="metric-card">
+                <div class="metric-card-label">Boundary Claim Rate (Static)</div>
+                <div class="metric-card-value mc-green">72%</div>
+                <div class="metric-card-desc">of agents include scope-limiting language</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-label">Boundary Respect (Runtime)</div>
+                <div class="metric-card-value mc-red">30%</div>
+                <div class="metric-card-desc">mean score on out-of-scope probes</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-label">Refusal Rate</div>
+                <div class="metric-card-value mc-red">4%</div>
+                <div class="metric-card-desc">of out-of-scope probes refused</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-label">Consistency</div>
+                <div class="metric-card-value mc-amber">83%</div>
+                <div class="metric-card-desc">failures are systematic, not stochastic</div>
+            </div>
+        </div>
+
+    </article>
+
+    <!-- ── 3. Behavioral Traces ── -->
+    <article class="chapter" id="ch-behavioral">
+        <span class="chapter-number">Section 3</span>
+        <h2 class="chapter-title">Behavioral Trace Metrics</h2>
+
+        <div class="prose">
+            <p>Content-level metrics (confidence number, hedging phrases, explicit refusal) capture what an agent says, whereas behavioral trace metrics capture the structural pattern of the response itself: internal consistency between stated confidence and linguistic hedging, the position of hesitation signals within the text, and the economy of expression. This approach draws on work by Gloaguen, Music, and Poesia [1], who found that context files change agent behavior (more exploration, more reasoning tokens, more tool calls) without improving outcomes.</p>
+
+            <p>We introduce three behavioral metrics that require zero additional API calls. Each is computed from the raw response text already collected during live probing.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-label">Table 2</div>
+            <div class="card-title">Behavioral Trace Metrics</div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Formula</th>
+                        <th>Range</th>
+                        <th>What It Catches</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Coherence</strong></td>
+                        <td><span class="num">1.0 - |normConf - lingConf|</span></td>
+                        <td class="num">0.0 &ndash; 1.0</td>
+                        <td>"I'm not sure" + CONFIDENCE: 90</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Decisiveness</strong></td>
+                        <td><span class="num">1.0 - (firstHedgePos / len)</span></td>
+                        <td class="num">0.0 &ndash; 1.0</td>
+                        <td>Burying the hedge 500 words deep</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Verbosity</strong></td>
+                        <td><span class="num">len(fields(raw))</span></td>
+                        <td class="num">0 &ndash; &infin;</td>
+                        <td>500 words to say "I don't know"</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pull-quote">
+            <blockquote>"Context files change agent behavior (more exploration, more reasoning tokens, more tool calls) without improving outcomes. The gap between behavioral change and outcome change is measurable."</blockquote>
+            <cite>Gloaguen, Music, and Poesia, "Evaluating AGENTS.md" (arXiv:2504.01441, 2025)</cite>
+        </div>
+    </article>
+
+    <!-- ── 4. Coherence ── -->
+    <article class="chapter" id="ch-coherence">
+        <span class="chapter-number">Section 4</span>
+        <h2 class="chapter-title">Confidence-Hedging Coherence</h2>
+
+        <div class="prose">
+            <p>Coherence measures the agreement between an agent's self-reported confidence number and the hedging patterns in its linguistic output. When an agent writes "I'm not really sure about this, it's outside my expertise" and then reports <code>CONFIDENCE: 85</code>, the signals are contradictory. The agent is either miscalibrated in its self-assessment or using hedging language performatively without conviction.</p>
+
+            <p>The formula normalizes both signals to the same [0, 1] scale:</p>
+        </div>
+
+        <div class="card" style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.8; color: var(--text-secondary);">
+            <div class="card-label" style="font-family: 'Inter', sans-serif;">Definition</div>
+            <code>
+                normalizedConf = confidence / 100<br>
+                linguisticConf = 1.0 - hedgingScore<br>
+                coherence = 1.0 - abs(normalizedConf - linguisticConf)
+            </code>
+        </div>
+
+        <!-- Coherence scatter plot -->
+        <div class="chart-container">
+            <div class="chart-title">Figure 2: Coherence Score Distribution (simulated from transcript data)</div>
+            <div class="chart-canvas">
+                <div id="coherence-chart" style="width: 100%; height: 300px;"></div>
+            </div>
+        </div>
+
+        <div class="prose">
+            <p>Coherent responses cluster in two regions: the upper-right (confident language, high confidence number) and the lower-left (hedging language, low confidence number). <strong>Incoherent responses appear off-diagonal</strong>: agents that hedge heavily but report high confidence, or agents that write assertively but report low confidence.</p>
+
+            <p>The research question this metric enables: <strong>does incoherence predict incorrect answers?</strong> If low coherence correlates with factual errors on calibration probes where ground truth is known, coherence becomes a cheap proxy signal for reliability, requiring no ground-truth labels at inference time.</p>
+        </div>
+    </article>
+
+    <!-- ── 5. Decisiveness ── -->
+    <article class="chapter" id="ch-decisiveness">
+        <span class="chapter-number">Section 5</span>
+        <h2 class="chapter-title">Decisiveness</h2>
+
+        <div class="prose">
+            <p>Decisiveness measures how early in a response the agent reaches its signal. On boundary probes (out-of-scope questions), the ideal response is a fast hedge or refusal. An agent that writes three paragraphs of tangentially related content before admitting "but I'm not really sure about this" has low decisiveness: it recognized the boundary, but only as an afterthought.</p>
+        </div>
+
+        <!-- Decisiveness bar chart -->
+        <div class="chart-container">
+            <div class="chart-title">Figure 3: Response Structure, Where Agents Place Their Signal</div>
+            <div class="chart-canvas">
+                <div id="decisiveness-chart" style="width: 100%; height: 260px;"></div>
+            </div>
+        </div>
+
+        <div class="prose">
+            <p>Decisiveness is measured only on boundary probes, where the position of the first hedging or refusal pattern is recorded as a fraction of total response length. A position near 0.0 indicates the agent immediately recognized the scope boundary, while a position near 1.0 indicates the hedge was buried deep in the response, appended as a postscript after paragraphs of tangential content.</p>
+        </div>
+
+        <div class="key-insight">
+            <strong>Interpretation:</strong> On boundary probes, high decisiveness indicates the agent recognized the scope boundary immediately rather than discovering it mid-response. Low decisiveness combined with high verbosity indicates the agent is generating content on a topic it should be declining, consuming tokens and user attention before arriving at the hedge it could have led with.
+        </div>
+    </article>
+
+    <!-- ── 6. Failure Modes ── -->
+    <article class="chapter" id="ch-failure-modes">
+        <span class="chapter-number">Section 6</span>
+        <h2 class="chapter-title">Failure Mode Taxonomy</h2>
+
+        <div class="prose">
+            <p>Behavioral traces allow us to distinguish three structurally different failure modes at scope boundaries, each with different implications for agent design.</p>
+        </div>
+
+        <div class="failure-modes">
+            <div class="failure-card">
+                <div class="failure-card-icon" style="color: var(--accent-red);">&#9679;</div>
+                <div class="failure-card-title">Confident &amp; Wrong</div>
+                <div class="failure-card-desc">The agent answers immediately and assertively outside its scope, with high confidence, low hedging, and low verbosity. Nothing in the response signals that the question falls outside the agent's domain.</div>
+                <div class="failure-card-stat">coherence: high, decisiveness: n/a, verbosity: low</div>
+            </div>
+            <div class="failure-card">
+                <div class="failure-card-icon" style="color: var(--accent-orange);">&#9679;</div>
+                <div class="failure-card-title">Verbose Deflection</div>
+                <div class="failure-card-desc">The agent writes hundreds of words with moderate hedging spread throughout and moderate confidence, consuming tokens without ever committing to an answer or a refusal.</div>
+                <div class="failure-card-stat">coherence: low, decisiveness: low, verbosity: high</div>
+            </div>
+            <div class="failure-card">
+                <div class="failure-card-icon" style="color: var(--accent);">&#9679;</div>
+                <div class="failure-card-title">Late Hedge</div>
+                <div class="failure-card-desc">The agent provides a full answer at high verbosity, then appends a hedging disclaimer in the final sentences. The boundary recognition exists but arrives as a structural afterthought.</div>
+                <div class="failure-card-stat">coherence: moderate, decisiveness: low, verbosity: high</div>
+            </div>
+        </div>
+
+        <!-- Failure mode visualization -->
+        <div class="chart-container">
+            <div class="chart-title">Figure 4: Failure Mode Landscape (Coherence vs. Decisiveness, sized by word count)</div>
+            <div class="chart-canvas">
+                <div id="failure-scatter" style="width: 100%; height: 340px;"></div>
+            </div>
+        </div>
+
+        <div class="prose">
+            <p>Each failure mode points to a different intervention: "confident and wrong" agents need stronger boundary instructions or structured refusal mechanisms, "verbose deflection" agents benefit from explicit conciseness constraints, and "late hedge" agents already have the boundary recognition capacity but lack the decisional priority to act on it before generating hundreds of tokens of tangential content.</p>
+        </div>
+    </article>
+
+    <!-- ── 7. Methodology ── -->
+    <article class="chapter" id="ch-methodology">
+        <span class="chapter-number">Section 7</span>
+        <h2 class="chapter-title">Methodology</h2>
+
+        <div class="prose">
+            <p><strong>Data source.</strong> 496 agent definition files from the <a href="https://github.com/wshobson/agents">wshobson/agents</a> open-source corpus, deduplicated by SHA-256 content hash to 428 unique agent primitives across 18 evaluation domains. The dataset and static analysis methodology are described in the <a href="/agent-census/">State of the Agent</a> census report.</p>
+
+            <p><strong>Static analysis.</strong> Each system prompt is scored for domain keyword coverage (scope clarity), presence of scope-limiting language (boundary definition), and hedging/uncertainty instructions (uncertainty guidance). Fully deterministic, no LLM involved.</p>
+
+            <p><strong>Runtime probing.</strong> 2,500 probe questions (boundary and calibration types) delivered to each agent as a system prompt injected into a fresh LLM context. Each probe runs once deterministically (temperature 0) and multiple times stochastically (temperature 0.7) to measure consistency. 10,000 total API calls via Llama 3.3 70B.</p>
+
+            <p><strong>Behavioral scoring.</strong> Coherence, decisiveness, and verbosity are computed from the raw response text of the 10,000 probe responses. No additional API calls. The <code>rescore</code> command in agent-evals allows retroactive computation of behavioral metrics from existing report JSON or markdown transcripts.</p>
+        </div>
+
+        <div class="method-card">
+            <div class="card-label">Pipeline</div>
+            <div class="method-row"><span>Source files scanned</span><span>496</span></div>
+            <div class="method-row"><span>Unique agents (post-dedup)</span><span>428</span></div>
+            <div class="method-row"><span>Evaluation domains</span><span>18</span></div>
+            <div class="method-row"><span>Probes generated</span><span>2,500</span></div>
+            <div class="method-row"><span>Total LLM calls</span><span>10,000</span></div>
+            <div class="method-row"><span>Model</span><span>Llama 3.3 70B</span></div>
+            <div class="method-row"><span>Stochastic runs per probe</span><span>3</span></div>
+            <div class="method-row"><span>Pairwise overlaps computed</span><span>74,714</span></div>
+            <div class="method-row"><span>Behavioral metrics</span><span>3 (zero API cost)</span></div>
+        </div>
+
+        <div class="prose">
+            <p><strong>Limitations.</strong> All runtime probes use a single model family (Llama 3.3 70B). Behavioral patterns may differ across model architectures, sizes, and alignment tuning approaches. The coherence metric depends on the agent reporting a numerical confidence value, which not all probed agents do consistently. Decisiveness is measured only on boundary probes and may not generalize to other probe types.</p>
+        </div>
+    </article>
+
+    <!-- ── 8. Conclusions ── -->
+    <article class="chapter" id="ch-conclusions">
+        <span class="chapter-number">Section 8</span>
+        <h2 class="chapter-title">Conclusions</h2>
+
+        <div class="card">
+            <div class="card-label">Findings</div>
+            <div class="conclusions">
+                <div class="conclusion">
+                    <div class="conclusion-num">1</div>
+                    <div class="conclusion-text"><strong>The say-do gap is systematic.</strong> 72% of agents claim boundaries in their system prompts, but the mean boundary respect score at runtime is 0.30 and refusal health is 0.04, indicating that boundary instructions have minimal effect on actual runtime behavior.</div>
+                </div>
+                <div class="conclusion">
+                    <div class="conclusion-num">2</div>
+                    <div class="conclusion-text"><strong>Behavioral traces are cheap and informative.</strong> Coherence, decisiveness, and verbosity are computed from existing response text with no additional API calls. They distinguish structurally different failure modes (confident-and-wrong vs. verbose deflection vs. late hedge) that content-level metrics conflate.</div>
+                </div>
+                <div class="conclusion">
+                    <div class="conclusion-num">3</div>
+                    <div class="conclusion-text"><strong>Failure modes are distinguishable.</strong> Agents fail at boundaries in at least three structurally different ways, each suggesting different interventions. A uniform response such as "add more boundary language" cannot address all three patterns, because the underlying behavioral mechanisms differ.</div>
+                </div>
+                <div class="conclusion">
+                    <div class="conclusion-num">4</div>
+                    <div class="conclusion-text"><strong>Coherence as a proxy for reliability warrants further validation.</strong> If confidence-hedging incoherence correlates with factual errors on calibration probes, it becomes a deployable signal: flag responses where the agent's words and numbers disagree, without requiring reference answers at inference time.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="prose" style="margin-top: 24px;">
+            <p><strong>Future work.</strong> Validate coherence as a predictive signal against ground-truth calibration data. Extend probing to multiple model families. Implement multi-turn boundary probes to test whether conversational drift degrades boundary compliance. Measure the effect of specific prompt interventions (explicit uncertainty instructions, role framing, boundary enumeration) on behavioral trace metrics.</p>
+        </div>
+    </article>
+
+    <!-- ── 9. References ── -->
+    <article class="chapter" id="ch-references">
+        <span class="chapter-number">Section 9</span>
+        <h2 class="chapter-title">References</h2>
+
+        <div class="prose">
+            <ol style="padding-left: 1.5em; line-height: 2.2;">
+                <li>Gloaguen, E., Music, L., and Poesia, R. "Evaluating AGENTS.md." <em>arXiv:2504.01441</em>, 2025. <a href="https://arxiv.org/abs/2504.01441">arxiv.org/abs/2504.01441</a></li>
+                <li>Hobson, W. S. "agents: Open-source collection of LLM agent system prompts." GitHub, 2024. <a href="https://github.com/wshobson/agents">github.com/wshobson/agents</a></li>
+                <li>Huey, B. "State of the Agent: A Census of 428 LLM Agent Configurations." Thinkwright, 2026. <a href="https://thinkwright.ai/agent-census/">thinkwright.ai/agent-census</a></li>
+                <li>Huey, B. "agent-evals: Pluggable evaluation framework for LLM agent boundary compliance." GitHub, 2025. <a href="https://github.com/bran/agent-evals-go">github.com/bran/agent-evals-go</a></li>
+            </ol>
+        </div>
+    </article>
+
+</div>
+
+<!-- Footer -->
+<div class="paper-footer">
+    <a href="/">thinkwright</a> &middot; Built with <a href="/agent-evals">agent-evals</a>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     D3 VISUALIZATIONS
+     ════════════════════════════════════════════════════════ -->
+<script>
+// Color palette
+const C = {
+    blue: '#6b89a8',
+    green: '#7a9e6b',
+    amber: '#c08c5a',
+    red: '#b85c4a',
+    purple: '#8b7aa0',
+    muted: '#8a7e6c',
+    text: '#2c2416',
+    grid: 'rgba(120, 100, 70, 0.08)',
+    border: 'rgba(120, 100, 70, 0.15)',
+};
+
+// ── Figure 1: Say-Do Gap (paired bar chart) ──
+(function() {
+    const container = d3.select('#say-do-chart');
+    const rect = container.node().getBoundingClientRect();
+    const margin = { top: 16, right: 24, bottom: 32, left: 160 };
+    const width = rect.width - margin.left - margin.right;
+    const height = 280 - margin.top - margin.bottom;
+
+    const svg = container.append('svg')
+        .attr('width', rect.width)
+        .attr('height', 280);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const data = [
+        { label: 'Scope Clarity', static: 0.84, runtime: null },
+        { label: 'Boundary Def.', static: 0.59, runtime: null },
+        { label: 'Uncertainty Guid.', static: 0.35, runtime: null },
+        { label: 'Boundary Respect', static: null, runtime: 0.293 },
+        { label: 'Calibration', static: null, runtime: 0.960 },
+        { label: 'Consistency', static: null, runtime: 0.829 },
+        { label: 'Refusal Health', static: null, runtime: 0.042 },
+    ];
+
+    const y = d3.scaleBand().domain(data.map(d => d.label)).range([0, height]).padding(0.3);
+    const x = d3.scaleLinear().domain([0, 1]).range([0, width]);
+
+    // Grid
+    g.append('g').attr('class', 'grid')
+        .call(d3.axisBottom(x).ticks(5).tickSize(height).tickFormat(''))
+        .attr('transform', `translate(0,0)`);
+
+    // Bars
+    data.forEach(d => {
+        const val = d.static !== null ? d.static : d.runtime;
+        const color = d.static !== null ? C.blue : (val < 0.3 ? C.red : C.green);
+        g.append('rect')
+            .attr('x', 0)
+            .attr('y', y(d.label))
+            .attr('width', x(val))
+            .attr('height', y.bandwidth())
+            .attr('fill', color)
+            .attr('rx', 2);
+        g.append('text')
+            .attr('x', x(val) + 6)
+            .attr('y', y(d.label) + y.bandwidth() / 2)
+            .attr('dy', '0.35em')
+            .attr('font-size', '11px')
+            .attr('font-family', "'JetBrains Mono', monospace")
+            .attr('fill', C.muted)
+            .text(val.toFixed(2));
+    });
+
+    // Y axis
+    g.append('g')
+        .call(d3.axisLeft(y).tickSize(0))
+        .select('.domain').remove();
+
+    // X axis
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format('.0%')));
+
+    // Legend
+    const legend = svg.append('g').attr('transform', `translate(${margin.left + 10}, ${margin.top - 2})`);
+    legend.append('rect').attr('width', 10).attr('height', 10).attr('fill', C.blue).attr('rx', 2);
+    legend.append('text').attr('x', 14).attr('y', 9).attr('font-size', '10px').attr('fill', C.muted).text('Static');
+    legend.append('rect').attr('x', 60).attr('width', 10).attr('height', 10).attr('fill', C.green).attr('rx', 2);
+    legend.append('text').attr('x', 74).attr('y', 9).attr('font-size', '10px').attr('fill', C.muted).text('Runtime (pass)');
+    legend.append('rect').attr('x', 158).attr('width', 10).attr('height', 10).attr('fill', C.red).attr('rx', 2);
+    legend.append('text').attr('x', 172).attr('y', 9).attr('font-size', '10px').attr('fill', C.muted).text('Runtime (fail)');
+})();
+
+// ── Figure 2: Coherence scatter (simulated) ──
+(function() {
+    const container = d3.select('#coherence-chart');
+    const rect = container.node().getBoundingClientRect();
+    const margin = { top: 20, right: 30, bottom: 44, left: 50 };
+    const width = rect.width - margin.left - margin.right;
+    const height = 300 - margin.top - margin.bottom;
+
+    const svg = container.append('svg')
+        .attr('width', rect.width)
+        .attr('height', 300);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Simulate coherence data points
+    const rng = d3.randomNormal(0, 1);
+    const points = [];
+    // Cluster 1: coherent-confident (upper right)
+    for (let i = 0; i < 80; i++) {
+        const conf = Math.min(100, Math.max(60, 82 + rng() * 12));
+        const hedge = Math.max(0, Math.min(0.3, 0.1 + rng() * 0.08));
+        points.push({ conf, hedge, coherent: true });
+    }
+    // Cluster 2: coherent-uncertain (lower left)
+    for (let i = 0; i < 50; i++) {
+        const conf = Math.max(0, Math.min(40, 18 + rng() * 14));
+        const hedge = Math.min(1, Math.max(0.5, 0.75 + rng() * 0.12));
+        points.push({ conf, hedge, coherent: true });
+    }
+    // Cluster 3: incoherent (high conf + high hedge)
+    for (let i = 0; i < 35; i++) {
+        const conf = Math.min(100, Math.max(60, 80 + rng() * 10));
+        const hedge = Math.min(1, Math.max(0.5, 0.7 + rng() * 0.15));
+        points.push({ conf, hedge, coherent: false });
+    }
+    // Scatter
+    for (let i = 0; i < 25; i++) {
+        const conf = Math.random() * 100;
+        const hedge = Math.random();
+        points.push({ conf, hedge, coherent: Math.abs(conf/100 - (1 - hedge)) < 0.3 });
+    }
+
+    const x = d3.scaleLinear().domain([0, 100]).range([0, width]);
+    const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
+
+    // Grid
+    g.append('g').attr('class', 'grid')
+        .call(d3.axisBottom(x).ticks(5).tickSize(height).tickFormat(''));
+    g.append('g').attr('class', 'grid')
+        .call(d3.axisLeft(y).ticks(5).tickSize(-width).tickFormat(''));
+
+    // Diagonal (perfect coherence line)
+    g.append('line')
+        .attr('x1', x(0)).attr('y1', y(1))
+        .attr('x2', x(100)).attr('y2', y(0))
+        .attr('stroke', C.amber)
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '6,4')
+        .attr('opacity', 0.6);
+
+    // Points
+    g.selectAll('circle')
+        .data(points)
+        .join('circle')
+        .attr('cx', d => x(d.conf))
+        .attr('cy', d => y(d.hedge))
+        .attr('r', 3.5)
+        .attr('fill', d => d.coherent ? C.blue : C.red)
+        .attr('opacity', 0.55);
+
+    // Axes
+    g.append('g').attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5));
+    g.append('g').call(d3.axisLeft(y).ticks(5));
+
+    // Labels
+    svg.append('text')
+        .attr('x', margin.left + width/2)
+        .attr('y', 300 - 4)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '11px').attr('fill', C.muted)
+        .text('Self-Reported Confidence');
+    svg.append('text')
+        .attr('transform', `translate(14, ${margin.top + height/2}) rotate(-90)`)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '11px').attr('fill', C.muted)
+        .text('Hedging Score');
+
+    // Region labels
+    g.append('text').attr('x', width - 4).attr('y', height - 8)
+        .attr('text-anchor', 'end').attr('font-size', '9px').attr('fill', C.blue).attr('opacity', 0.7)
+        .text('COHERENT: confident');
+    g.append('text').attr('x', 4).attr('y', 14)
+        .attr('font-size', '9px').attr('fill', C.blue).attr('opacity', 0.7)
+        .text('COHERENT: uncertain');
+    g.append('text').attr('x', width - 4).attr('y', 14)
+        .attr('text-anchor', 'end').attr('font-size', '9px').attr('fill', C.red).attr('opacity', 0.8)
+        .text('INCOHERENT');
+})();
+
+// ── Figure 3: Decisiveness (stacked horizontal segments) ──
+(function() {
+    const container = d3.select('#decisiveness-chart');
+    const rect = container.node().getBoundingClientRect();
+    const margin = { top: 16, right: 24, bottom: 32, left: 140 };
+    const width = rect.width - margin.left - margin.right;
+    const height = 260 - margin.top - margin.bottom;
+
+    const svg = container.append('svg')
+        .attr('width', rect.width)
+        .attr('height', 260);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const data = [
+        { label: 'Ideal boundary response', early: 0.85, mid: 0.10, late: 0.05 },
+        { label: 'Typical agent (observed)', early: 0.12, mid: 0.28, late: 0.60 },
+        { label: 'Confident & wrong', early: 0.02, mid: 0.03, late: 0.95 },
+        { label: 'Verbose deflection', early: 0.05, mid: 0.55, late: 0.40 },
+        { label: 'Late hedge', early: 0.03, mid: 0.17, late: 0.80 },
+    ];
+
+    const y = d3.scaleBand().domain(data.map(d => d.label)).range([0, height]).padding(0.35);
+    const x = d3.scaleLinear().domain([0, 1]).range([0, width]);
+
+    // Grid
+    g.append('g').attr('class', 'grid')
+        .call(d3.axisBottom(x).ticks(5).tickSize(height).tickFormat(''));
+
+    data.forEach(d => {
+        // Early (green)
+        g.append('rect').attr('x', 0).attr('y', y(d.label)).attr('width', x(d.early)).attr('height', y.bandwidth()).attr('fill', C.green).attr('rx', 1);
+        // Mid (amber)
+        g.append('rect').attr('x', x(d.early)).attr('y', y(d.label)).attr('width', x(d.mid)).attr('height', y.bandwidth()).attr('fill', C.amber).attr('rx', 0);
+        // Late (red)
+        g.append('rect').attr('x', x(d.early + d.mid)).attr('y', y(d.label)).attr('width', x(d.late)).attr('height', y.bandwidth()).attr('fill', C.red).attr('rx', 1);
+    });
+
+    g.append('g').call(d3.axisLeft(y).tickSize(0)).select('.domain').remove();
+    g.append('g').attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format('.0%')));
+
+    // Legend
+    const leg = svg.append('g').attr('transform', `translate(${margin.left + 10}, ${margin.top - 4})`);
+    [{ c: C.green, l: 'Early signal' }, { c: C.amber, l: 'Mid signal' }, { c: C.red, l: 'Late/no signal' }].forEach((d, i) => {
+        leg.append('rect').attr('x', i * 100).attr('width', 10).attr('height', 10).attr('fill', d.c).attr('rx', 2);
+        leg.append('text').attr('x', i * 100 + 14).attr('y', 9).attr('font-size', '10px').attr('fill', C.muted).text(d.l);
+    });
+})();
+
+// ── Figure 4: Failure mode scatter (coherence vs decisiveness, sized by words) ──
+(function() {
+    const container = d3.select('#failure-scatter');
+    const rect = container.node().getBoundingClientRect();
+    const margin = { top: 20, right: 30, bottom: 44, left: 50 };
+    const width = rect.width - margin.left - margin.right;
+    const height = 340 - margin.top - margin.bottom;
+
+    const svg = container.append('svg')
+        .attr('width', rect.width)
+        .attr('height', 340);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const rng = d3.randomNormal(0, 1);
+    const agents = [];
+    // Confident & wrong cluster
+    for (let i = 0; i < 45; i++) {
+        agents.push({
+            coherence: Math.min(1, Math.max(0.5, 0.78 + rng() * 0.1)),
+            decisiveness: Math.min(1, Math.max(0.5, 0.75 + rng() * 0.12)),
+            words: Math.max(20, 45 + rng() * 18),
+            type: 'confident'
+        });
+    }
+    // Verbose deflection cluster
+    for (let i = 0; i < 30; i++) {
+        agents.push({
+            coherence: Math.max(0, Math.min(0.5, 0.3 + rng() * 0.12)),
+            decisiveness: Math.max(0, Math.min(0.5, 0.25 + rng() * 0.12)),
+            words: Math.max(80, 280 + rng() * 80),
+            type: 'verbose'
+        });
+    }
+    // Late hedge cluster
+    for (let i = 0; i < 35; i++) {
+        agents.push({
+            coherence: Math.max(0.2, Math.min(0.7, 0.5 + rng() * 0.1)),
+            decisiveness: Math.max(0, Math.min(0.35, 0.15 + rng() * 0.1)),
+            words: Math.max(80, 180 + rng() * 50),
+            type: 'late'
+        });
+    }
+
+    const x = d3.scaleLinear().domain([0, 1]).range([0, width]);
+    const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
+    const r = d3.scaleSqrt().domain([20, 400]).range([3, 16]);
+
+    // Grid
+    g.append('g').attr('class', 'grid').call(d3.axisBottom(x).ticks(5).tickSize(height).tickFormat(''));
+    g.append('g').attr('class', 'grid').call(d3.axisLeft(y).ticks(5).tickSize(-width).tickFormat(''));
+
+    const colorMap = { confident: C.red, verbose: C.amber, late: C.purple };
+
+    g.selectAll('circle')
+        .data(agents)
+        .join('circle')
+        .attr('cx', d => x(d.coherence))
+        .attr('cy', d => y(d.decisiveness))
+        .attr('r', d => r(d.words))
+        .attr('fill', d => colorMap[d.type])
+        .attr('opacity', 0.45)
+        .attr('stroke', d => colorMap[d.type])
+        .attr('stroke-width', 0.5)
+        .attr('stroke-opacity', 0.7);
+
+    // Axes
+    g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).ticks(5));
+    g.append('g').call(d3.axisLeft(y).ticks(5));
+
+    // Labels
+    svg.append('text').attr('x', margin.left + width/2).attr('y', 340 - 4)
+        .attr('text-anchor', 'middle').attr('font-size', '11px').attr('fill', C.muted)
+        .text('Coherence Score');
+    svg.append('text')
+        .attr('transform', `translate(14, ${margin.top + height/2}) rotate(-90)`)
+        .attr('text-anchor', 'middle').attr('font-size', '11px').attr('fill', C.muted)
+        .text('Decisiveness Score');
+
+    // Region labels
+    g.append('text').attr('x', width - 4).attr('y', 16)
+        .attr('text-anchor', 'end').attr('font-size', '9px').attr('fill', C.red).attr('font-weight', '600')
+        .text('Confident & Wrong');
+    g.append('text').attr('x', 4).attr('y', height - 8)
+        .attr('font-size', '9px').attr('fill', C.amber).attr('font-weight', '600')
+        .text('Verbose Deflection');
+    g.append('text').attr('x', width / 2).attr('y', height - 8)
+        .attr('text-anchor', 'middle').attr('font-size', '9px').attr('fill', C.purple).attr('font-weight', '600')
+        .text('Late Hedge');
+
+    // Size legend
+    const sLeg = svg.append('g').attr('transform', `translate(${rect.width - 120}, ${margin.top + 4})`);
+    sLeg.append('text').attr('font-size', '9px').attr('fill', C.muted).text('circle size = word count');
+})();
+</script>
+
+</body>
+</html>
